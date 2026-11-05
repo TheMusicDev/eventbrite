@@ -1,0 +1,6 @@
+/docs               export-ignore
+/.github            export-ignore
+/.idea              export-ignore
+/phpstan.neon       export-ignore
+/.php-cs-fixer.php  export-ignore
+# tests/ intentionally shipped: FakeHttp is the documented test kit.
