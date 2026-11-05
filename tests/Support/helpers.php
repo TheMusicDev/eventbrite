@@ -24,14 +24,5 @@ function newClient(
     int $cacheTtl = 0,
     int $retries = 0,
 ): EventbriteClient {
-    return new EventbriteClient(
-        $http,
-        $http,
-        $http,
-        $token,
-        $cache,
-        null,
-        $retries,
-        $cacheTtl,
-    );
+    return new EventbriteClient($http, $http, $http, $token, $cache, null, $retries, $cacheTtl);
 }
