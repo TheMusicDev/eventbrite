@@ -6,6 +6,10 @@ A small client for the [Eventbrite API v3](https://www.eventbrite.com/platform/a
 read events, attendees, orders and ticket classes, manage webhooks, and run the
 OAuth authorization-code flow — with no framework lock-in.
 
+**Why this package exists**: the official `eventbrite/eventbrite-sdk-php` has
+had no release since 2019, and the popular community client is abandoned —
+modern PHP (8.2+) had no maintained, framework-agnostic Eventbrite client.
+
 - **PSR-18** HTTP client in (Guzzle, Symfony HTTP Client, WordPress-anything)
 - **PSR-16** cache optional — GET responses cached per token (10 min default)
 - **PSR-3** logger optional — warnings on 429 backoff
