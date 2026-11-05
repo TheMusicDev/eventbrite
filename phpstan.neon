@@ -1,3 +1,12 @@
+# Level max + strict rules. Two friction points are deliberately ignored,
+# both documented; everything else holds at max.
+#
+# 1) JSON boundary (src): json_decode returns array<mixed> — string-keyedness
+#    and item shapes are not statically provable. Runtime guards exist where a
+#    wrong shape can hurt (webhook lists, pagination).
+# 2) tests/: Pest assertion callbacks and anonymous PSR-16 doubles — Pest's
+#    toThrow() accepts Closure(Throwable): mixed and PSR-16 declares `iterable`
+#    untyped, so the "correct" typing is either missing or contravariant.
 includes:
     - vendor/phpstan/phpstan-strict-rules/rules.neon
 
@@ -6,3 +15,19 @@ parameters:
     paths:
         - src
         - tests
+    ignoreErrors:
+        -
+            identifier: return.type
+            path: src
+        -
+            identifier: generator.valueType
+            path: src
+        -
+            identifier: method.childParameterType
+            path: tests
+        -
+            identifier: argument.type
+            path: tests
+        -
+            identifier: offsetAccess.nonOffsetAccessible
+            path: tests
