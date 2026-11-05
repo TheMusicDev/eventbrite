@@ -1,0 +1,55 @@
+{
+    "name": "themusicdev/eventbrite",
+    "description": "Eventbrite API v3 client - PSR-18 HTTP, PSR-16 cache, framework agnostic",
+    "license": "MIT",
+    "type": "library",
+    "keywords": [
+        "eventbrite",
+        "api",
+        "psr-18",
+        "psr-16",
+        "tickets"
+    ],
+    "require": {
+        "php": "^8.2",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.0 || ^2.0",
+        "psr/simple-cache": "^3.0",
+        "psr/log": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "TheMusicDev\\Eventbrite\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "TheMusicDev\\Eventbrite\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.9",
+        "pestphp/pest": "^3.0",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "scripts": {
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "stan": "phpstan analyse --no-progress",
+        "test": "pest",
+        "test-coverage": "pest --coverage",
+        "check": [
+            "@cs",
+            "@stan",
+            "@test"
+        ]
+    }
+}

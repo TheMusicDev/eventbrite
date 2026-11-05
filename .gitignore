@@ -1,0 +1,7 @@
+/vendor/
+/coverage/
+.php-cs-fixer.cache
+.phpunit.result.cache
+.phpunit.cache/
+.pest/
+composer.lock.bak

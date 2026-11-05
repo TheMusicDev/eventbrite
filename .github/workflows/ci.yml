@@ -1,0 +1,33 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                php: ['8.2', '8.3', '8.4']
+        steps:
+            - uses: actions/checkout@v4
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  coverage: pcov
+                  tools: composer, php-cs-fixer
+            - name: Install dependencies
+              run: composer update --prefer-dist --no-interaction --no-progress
+            - name: Style (dry run)
+              run: composer cs
+            - name: PHPStan
+              run: composer stan
+            - name: Tests + coverage
+              run: vendor/bin/pest --coverage-clover coverage/clover.xml
+            - name: Require-checker (PHAR)
+              if: matrix.php == '8.4'
+              run: |
+                  curl -sL https://github.com/ergebnis/composer-require-checker/releases/latest/download/composer-require-checker.phar -o /tmp/composer-require-checker.phar
+                  php /tmp/composer-require-checker.phar check composer.json
