@@ -166,6 +166,16 @@ it('caches GET responses when a cache is present', function (): void {
     expect($cache->items)->toHaveCount(1);
 });
 
+it('does not cache an empty decode, so a bad 2xx is not served for the whole ttl', function (string $body): void {
+    $http = fakeHttp();
+    $http->queue('GET', EventbriteClient::BASE_URL . 'users/me/', new Response(200, [], Utils::streamFor($body)));
+    $client = newClient($http, 'tok', cache: arrayCache(), cacheTtl: 600);
+
+    expect($client->me())->toBe([]);
+    expect($client->me())->toBe([]);
+    expect($http->requests)->toHaveCount(2);
+})->with(['<html>gateway error</html>', '', '{}']);
+
 it('never caches the webhooks listing', function (): void {
     $http = fakeHttp();
     $hooksUrl = EventbriteClient::BASE_URL . 'organizations/444/webhooks/';

@@ -359,7 +359,8 @@ class EventbriteClient
         $this->assertApiUrl($url);
         $data = $this->decode($this->sendWithRetry('GET', $url, $params), $url);
 
-        if ($this->cache instanceof CacheInterface && $this->cacheTtl > 0) {
+        // decode() maps a non-JSON 2xx to []; caching that would serve it for the whole TTL.
+        if ($data !== [] && $this->cache instanceof CacheInterface && $this->cacheTtl > 0) {
             $this->cache->set($cacheKey, $data, $this->cacheTtl);
         }
 
