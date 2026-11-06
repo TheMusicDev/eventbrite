@@ -165,9 +165,10 @@ not single-use.
 
 ## Testing your integration
 
-`Tests\Support\FakeHttp` ships in the dev autoload (`TheMusicDev\Eventbrite\Tests\Support`)
-or is trivial to copy: it is a recording, rotating PSR-18 client + PSR-17
-factories in one anonymous-class-free object. See `tests/` for usage.
+`tests/Support/FakeHttp.php` is a recording, rotating PSR-18 client + PSR-17
+factories in one object. Composer doesn't autoload it for consumers, so `require`
+it from `vendor/themusicdev/eventbrite/tests/Support/FakeHttp.php` or copy it, and
+run `composer require --dev guzzlehttp/psr7`, which it needs. See `tests/` for usage.
 
 ## Docs
 
