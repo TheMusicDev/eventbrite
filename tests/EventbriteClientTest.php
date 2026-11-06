@@ -250,6 +250,25 @@ it('ensureWebhooks is idempotent', function (): void {
     expect($second)->toBe(['existing' => 2, 'created' => 0]);
 });
 
+it('ensureWebhooks does not count an event-scoped webhook as registered', function (): void {
+    $http = fakeHttp();
+    $url = 'https://silica.test/webhook';
+    $hooksUrl = EventbriteClient::BASE_URL . 'organizations/444/webhooks/';
+    $http->queue('GET', $hooksUrl, FakeHttp::jsonResponse(200, ['webhooks' => [
+        ['id' => 'h1', 'endpoint_url' => $url, 'actions' => 'order.placed', 'event_id' => '777'],
+        ['id' => 'h2', 'endpoint_url' => $url, 'actions' => 'attendee.updated', 'event_id' => null],
+        ['id' => 'h3', 'endpoint_url' => $url, 'actions' => 'event.published', 'event_id' => ''],
+        ['id' => 'h4', 'endpoint_url' => $url, 'actions' => 'event.updated'],
+    ]]));
+    $http->queue('POST', $hooksUrl, FakeHttp::jsonResponse(200, ['id' => 'h5']));
+    $client = newClient($http, cache: null, cacheTtl: 0);
+
+    $result = $client->ensureWebhooks('444', $url, ['order.placed', 'attendee.updated', 'event.published', 'event.updated']);
+
+    expect($result)->toBe(['existing' => 3, 'created' => 1]);
+    expect(json_decode($http->requests[1]['body'], true))->toBe(['endpoint_url' => $url, 'actions' => 'order.placed']);
+});
+
 it('normalizeActions accepts string, comma-string and array shapes', function (): void {
     expect(EventbriteClient::normalizeActions('attendee.updated'))->toBe(['attendee.updated']);
     expect(EventbriteClient::normalizeActions('attendee.updated, order.placed'))->toBe(['attendee.updated', 'order.placed']);
@@ -270,6 +289,16 @@ it('createWebhook posts urlencoded action string and drops null ids', function (
     expect($sent['url'])->toBe($hooksUrl);
     expect($sent['headers']['content-type'])->toBe('application/json');
     expect(json_decode($sent['body'], true))->toBe(['endpoint_url' => 'https://x.dev/hook', 'actions' => 'attendee.updated,order.placed']);
+});
+
+it('createWebhook sends event_id to limit the webhook to one event', function (): void {
+    $http = fakeHttp();
+    $http->queue('POST', EventbriteClient::BASE_URL . 'organizations/444/webhooks/', FakeHttp::jsonResponse(200, ['id' => 'n1']));
+    $client = newClient($http, cache: null, cacheTtl: 0);
+
+    $client->createWebhook('444', 'https://x.dev/hook', ['order.placed'], '777');
+
+    expect(json_decode($http->requests[0]['body'], true))->toBe(['endpoint_url' => 'https://x.dev/hook', 'actions' => 'order.placed', 'event_id' => '777']);
 });
 
 it('deleteWebhook sends a DELETE with bearer auth', function (): void {

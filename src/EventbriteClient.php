@@ -188,25 +188,26 @@ class EventbriteClient
     /**
      * POST /v3/organizations/{id}/webhooks/ — register a webhook.
      *
-     * Body shape (endpoint_url root-level, actions as a comma-separated string)
-     * verified live: Eventbrite echoes the fields back and returns `actions`
-     * as an array. Not detailed in the reference docs.
+     * Body shape (endpoint_url root-level, actions as a comma-separated string,
+     * optional event_id) verified live: Eventbrite echoes the fields back, returns
+     * `actions` as an array and `event_id` as null for org-wide webhooks. Not
+     * detailed in the reference docs.
      *
      * @param string $orgId Organization ID.
      * @param string $endpointUrl The public URL Eventbrite should POST to.
      * @param array<string> $actions Action codes, e.g. ['attendee.updated', 'barcode.checked_in'].
-     * @param string|null $eventbriteId Existing webhook id to update (same POST when null).
+     * @param string|null $eventId Limit the webhook to one event; null applies to all events in the organization.
      * @return array<string, mixed> The created webhook object.
      * @throws \TheMusicDev\Eventbrite\EventbriteApiException For non-2xx responses.
      */
-    public function createWebhook(string $orgId, string $endpointUrl, array $actions = ['attendee.updated'], ?string $eventbriteId = null): array
+    public function createWebhook(string $orgId, string $endpointUrl, array $actions = ['attendee.updated'], ?string $eventId = null): array
     {
         $body = [
             'endpoint_url' => $endpointUrl,
             'actions' => implode(',', $actions),
         ];
-        if ($eventbriteId !== null) {
-            $body['event_id'] = $eventbriteId;
+        if ($eventId !== null) {
+            $body['event_id'] = $eventId;
         }
 
         return $this->post('organizations/' . $orgId . '/webhooks/', $body);
@@ -241,7 +242,8 @@ class EventbriteClient
     /**
      * Make sure an org has one webhook per given action code pointing at
      * $endpointUrl; creates the missing registrations. Listing is authoritative
-     * from Eventbrite, so this survives any local state loss.
+     * from Eventbrite, so this survives any local state loss. Webhooks with an
+     * event_id do not count: they fire for one event, not the whole org.
      *
      * @param string $orgId Organization ID.
      * @param string $endpointUrl Webhook target URL.
@@ -254,7 +256,11 @@ class EventbriteClient
         $listing = $this->webhooks($orgId);
         if (is_array($listing['webhooks'] ?? null)) {
             foreach ($listing['webhooks'] as $hook) {
-                if (!is_array($hook) || ($hook['endpoint_url'] ?? null) !== $endpointUrl) {
+                if (
+                    !is_array($hook)
+                    || ($hook['endpoint_url'] ?? null) !== $endpointUrl
+                    || ($hook['event_id'] ?? '') !== ''
+                ) {
                     continue;
                 }
                 foreach (self::normalizeActions($hook['actions'] ?? null) as $action) {
@@ -378,11 +384,12 @@ class EventbriteClient
 
     /**
      * Raw HTTP GET — no decoding, no cache: headers, status and body, for
-     * debugging/scratchpad uses. Non-2xx still throws.
+     * debugging/scratchpad uses. Non-2xx responses are returned, not thrown;
+     * 429s are still retried first.
      *
      * @param string $url Full URL (anything outside the API base throws).
      * @return \Psr\Http\Message\ResponseInterface
-     * @throws \TheMusicDev\Eventbrite\EventbriteApiException For non-2xx responses.
+     * @throws \RuntimeException When $url is outside the API base.
      */
     public function getRaw(string $url): ResponseInterface
     {
