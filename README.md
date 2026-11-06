@@ -57,12 +57,17 @@ $client = new EventbriteClient(
 
 $me              = $client->me();                          // GET /users/me/
 $organizations   = $client->organizations();               // GET /users/me/organizations/
-$orgId           = $organizations['organizations'][0]['id'] ?? $me['id'];
+$orgId           = $organizations['organizations'][0]['id']
+    ?? throw new RuntimeException('This Eventbrite account has no organization.');
 $allEvents       = $client->organizationEvents($orgId);    // Generator over pages
 foreach ($allEvents as $event) {
     // ...
 }
 ```
+
+`organizations()` can come back empty. Eventbrite's [docs](https://www.eventbrite.com/platform/docs/organizations)
+say the user id then works as the organization id, but it returned 404 in testing
+(2026-11-05), so create an organization in the Eventbrite dashboard first.
 
 ### Caching
 
