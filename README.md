@@ -139,17 +139,29 @@ $oauth = new EventbriteOAuth($httpClient, $httpFactory, $httpFactory,
     $appSecret,                       // any stable app secret, signs the state
 );
 
+session_start();
+
 // 1. redirect the browser to:
-$oauth->authorizeUrl($oauth->newState());
+$oauth->authorizeUrl($oauth->newState(session_id()));
 
 // 2. on the callback (?code=...&state=...):
-if ($oauth->verifyState($state)) {
+if ($oauth->verifyState($state, session_id())) {
     $tokenResponse = $oauth->exchangeCode($code); // ['access_token' => ...]
     // store $tokenResponse['access_token'] and pass it to the client
 }
 ```
 
-The state is a signed nonce-HMAC — no session storage needed anywhere.
+The state is signed and stored nowhere, but it is bound to the visitor value, so
+a state minted for one browser fails in another. That blocks login CSRF, where an
+attacker gets a victim to open the attacker's own callback URL. Any value that
+identifies the browser works, as long as it survives until the callback:
+
+- Don't regenerate the session id mid-flow.
+- `SameSite=Strict` session cookies aren't sent on the redirect back from
+  Eventbrite; use `Lax`.
+
+States expire after 10 minutes (`$maxAge` on `verifyState()` changes this) and are
+not single-use.
 
 ## Testing your integration
 

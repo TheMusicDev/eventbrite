@@ -12,13 +12,50 @@ use TheMusicDev\Eventbrite\Tests\Support\FakeHttp;
 it('mints and verifies the signed state, rejecting tampering', function (): void {
     $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'app-salt');
 
-    $state = $oauth->newState();
-    expect($state)->toMatch('/^[0-9a-f]{24}-[0-9a-f]{64}$/');
-    expect($oauth->verifyState($state))->toBeTrue();
+    $state = $oauth->newState('session-a');
+    expect($state)->toMatch('/^[0-9a-f]{24}\.\d+-[0-9a-f]{64}$/');
+    expect($oauth->verifyState($state, 'session-a'))->toBeTrue();
     // Flip the MAC's first char; hardcoding one value is a no-op when the MAC already starts with it.
-    expect($oauth->verifyState(substr_replace($state, $state[25] === '0' ? '1' : '0', 25, 1)))->toBeFalse();
-    expect($oauth->verifyState('deadbeefdeadbeefdeadbeef-fake'))->toBeFalse();
-    expect($oauth->verifyState('no-mac-at-all'))->toBeFalse();
+    $macAt = strlen($state) - 64;
+    expect($oauth->verifyState(substr_replace($state, $state[$macAt] === '0' ? '1' : '0', $macAt, 1), 'session-a'))->toBeFalse();
+    expect($oauth->verifyState('deadbeefdeadbeefdeadbeef-fake', 'session-a'))->toBeFalse();
+    expect($oauth->verifyState('no-mac-at-all', 'session-a'))->toBeFalse();
+});
+
+it('rejects a state minted for another visitor', function (): void {
+    $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'app-salt');
+
+    expect($oauth->verifyState($oauth->newState('attacker-session'), 'victim-session'))->toBeFalse();
+});
+
+it('expires a state after the ttl and signs its timestamp', function (): void {
+    $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'app-salt');
+    $signedAt = static function (int $issuedAt): string {
+        $payload = str_repeat('a', 24) . '.' . $issuedAt;
+
+        return $payload . '-' . hash_hmac('sha256', 'eventbrite-oauth|' . $payload . '|session-a', 'app-salt');
+    };
+
+    expect($oauth->verifyState($signedAt(time() - EventbriteOAuth::STATE_TTL + 60), 'session-a'))->toBeTrue();
+    expect($oauth->verifyState($signedAt(time() - EventbriteOAuth::STATE_TTL - 60), 'session-a'))->toBeFalse();
+    expect($oauth->verifyState($oauth->newState('session-a'), 'session-a', maxAge: -1))->toBeFalse();
+
+    $refreshed = preg_replace('/\.\d+-/', '.' . (time() + 1000) . '-', $oauth->newState('session-a'));
+    expect($oauth->verifyState($refreshed, 'session-a'))->toBeFalse();
+});
+
+it('rejects a state in the unbound 0.1 format', function (): void {
+    $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'app-salt');
+    $nonce = str_repeat('a', 24);
+
+    expect($oauth->verifyState($nonce . '-' . hash_hmac('sha256', 'eventbrite-oauth|' . $nonce, 'app-salt'), 'session-a'))->toBeFalse();
+});
+
+it('refuses an empty visitor, which is what session_id() returns before session_start()', function (): void {
+    $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'app-salt');
+
+    expect($oauth->verifyState($oauth->newState('session-a'), ''))->toBeFalse();
+    expect(fn () => $oauth->newState(''))->toThrow(InvalidArgumentException::class, 'visitor');
 });
 
 it('refuses to construct without full credentials', function (): void {
@@ -28,12 +65,12 @@ it('refuses to construct without full credentials', function (): void {
 it('builds the authorize url with all parameters', function (): void {
     $oauth = new EventbriteOAuth(fakeHttp(), fakeHttp(), fakeHttp(), 'key', 'secret', 'https://app.test/cb', 'salt');
 
-    $target = $oauth->authorizeUrl($oauth->newState());
+    $target = $oauth->authorizeUrl($oauth->newState('session-a'));
     parse_str(parse_url($target, PHP_URL_QUERY) ?? '', $query);
     expect($query['response_type'])->toBe('code');
     expect($query['client_id'])->toBe('key');
     expect($query['redirect_uri'])->toBe('https://app.test/cb');
-    expect($oauth->verifyState($query['state']))->toBeTrue();
+    expect($oauth->verifyState($query['state'], 'session-a'))->toBeTrue();
 });
 
 it('exchanges the code with the required form fields', function (): void {
