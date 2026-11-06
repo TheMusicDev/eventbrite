@@ -15,7 +15,8 @@ it('mints and verifies the signed state, rejecting tampering', function (): void
     $state = $oauth->newState();
     expect($state)->toMatch('/^[0-9a-f]{24}-[0-9a-f]{64}$/');
     expect($oauth->verifyState($state))->toBeTrue();
-    expect($oauth->verifyState(substr($state, 0, 24) . '-0' . substr($state, 26)))->toBeFalse();
+    // Flip the MAC's first char; hardcoding one value is a no-op when the MAC already starts with it.
+    expect($oauth->verifyState(substr_replace($state, $state[25] === '0' ? '1' : '0', 25, 1)))->toBeFalse();
     expect($oauth->verifyState('deadbeefdeadbeefdeadbeef-fake'))->toBeFalse();
     expect($oauth->verifyState('no-mac-at-all'))->toBeFalse();
 });
