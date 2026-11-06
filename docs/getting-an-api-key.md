@@ -40,9 +40,9 @@ With only an API key + client secret:
 1. Register your redirect URI in the app's settings (exact string match, e.g.
    `https://example.com/oauth/eventbrite/callback`; `http://localhost:8766/...`
    works in development).
-2. Send users to `EventbriteOAuth::authorizeUrl($oauth->newState())`.
-3. On the callback, verify the state, then exchange:
-   `EventbriteOAuth::exchangeCode($code)` → `['access_token' => ...]`.
+2. Send users to `$oauth->authorizeUrl($oauth->newState(session_id()))`.
+3. On the callback, check `$oauth->verifyState($state, session_id())`, then
+   exchange: `$oauth->exchangeCode($code)` → `['access_token' => ...]`.
 4. Store the access token yourself (DB, cache) and pass it to
    `EventbriteClient` for that user's calls.
 

@@ -12,8 +12,8 @@ use Psr\Http\Message\StreamFactoryInterface;
  * Eventbrite OAuth 2 authorization-code flow
  * (https://www.eventbrite.com/platform/docs/authentication).
  *
- * - newState() / verifyState(): a signed, stateless CSRF value — the callback
- *   verifies the signature without needing any session.
+ * - newState() / verifyState(): a signed CSRF value bound to one visitor, which
+ *   expires. Nothing is stored; the callback re-derives it from the same visitor value.
  * - authorizeUrl(): the URL to redirect the browser to.
  * - exchangeCode(): swaps the ?code= for a bearer access token.
  * - saveToken() is the host app's job (token storage is your persistence).
@@ -22,6 +22,9 @@ use Psr\Http\Message\StreamFactoryInterface;
  */
 class EventbriteOAuth
 {
+    /** @var int Seconds a state stays valid: how long the user has to approve on Eventbrite. */
+    public const STATE_TTL = 600;
+
     private string $clientId;
 
     private string $clientSecret;
@@ -72,28 +75,46 @@ class EventbriteOAuth
     }
 
     /**
-     * A signed, stateless CSRF value: nonce-HMAC. Immutable across redirects;
-     * no session required on any side.
+     * A signed CSRF value bound to one visitor: nonce, issue time and HMAC.
+     * Nothing is stored, but the HMAC covers $visitor, so a state minted for
+     * one browser fails in another. That is what stops login CSRF: an attacker's
+     * own callback URL cannot be replayed in a victim's browser.
      *
+     * @param string $visitor Identifies this browser, e.g. session_id(). Must stay the same until the callback.
      * @return string
+     * @throws \InvalidArgumentException When $visitor is empty (session_id() is '' before session_start()).
      */
-    public function newState(): string
+    public function newState(string $visitor): string
     {
-        $nonce = bin2hex(random_bytes(12));
+        if ($visitor === '') {
+            throw new \InvalidArgumentException(
+                'newState() needs a non-empty visitor value, e.g. session_id() after session_start().',
+            );
+        }
+        $payload = bin2hex(random_bytes(12)) . '.' . time();
 
-        return $nonce . '-' . hash_hmac('sha256', 'eventbrite-oauth|' . $nonce, $this->salt);
+        return $payload . '-' . $this->signState($payload, $visitor);
     }
 
     /**
      * @param string $state The state value Eventbrite returned with the redirect.
-     * @return bool True when the value was minted by newState() and is untampered.
+     * @param string $visitor The same value that was passed to newState().
+     * @param int $maxAge Seconds the state stays valid.
+     * @return bool True when newState() minted the value for $visitor within $maxAge, untampered. Not single-use.
      */
-    public function verifyState(string $state): bool
+    public function verifyState(string $state, string $visitor, int $maxAge = self::STATE_TTL): bool
     {
-        [$nonce, $mac] = explode('-', $state, 2) + [null, null];
+        if ($visitor === '' || preg_match('/^([0-9a-f]{24}\.(\d+))-([0-9a-f]{64})$/D', $state, $parts) !== 1) {
+            return false;
+        }
 
-        return is_string($nonce) && is_string($mac)
-            && hash_equals(hash_hmac('sha256', 'eventbrite-oauth|' . $nonce, $this->salt), $mac);
+        return hash_equals($this->signState($parts[1], $visitor), $parts[3])
+            && time() - (int)$parts[2] <= $maxAge;
+    }
+
+    private function signState(string $payload, string $visitor): string
+    {
+        return hash_hmac('sha256', 'eventbrite-oauth|' . $payload . '|' . $visitor, $this->salt);
     }
 
     /**
